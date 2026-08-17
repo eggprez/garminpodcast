@@ -46,8 +46,7 @@ changing only `/mnt/tank` to your pool:
 ```yaml
 services:
   garminpodcast:
-    image: ghcr.io/eggprez/garminpodcast:latest
-    pull_policy: always
+    image: ghcr.io/eggprez/garminpodcast:v1.0.0
     container_name: garminpodcast
     restart: unless-stopped
     ports:
@@ -60,10 +59,15 @@ That is the whole file. Every setting falls back to a working default, and the
 session key is generated on first boot and kept in `/data/secret.key` so
 restarts do not log you out.
 
-`pull_policy: always` matters more than it looks. TrueNAS defaults to
-`IfNotPresent`, so once it has cached a `:latest` it will happily run that same
-image forever and never notice a newer one. See
-[Updating](#updating) if you left it out.
+**Use the version tag, not `:latest`.** TrueNAS defaults its image pull policy
+to `IfNotPresent`, so once it has cached `:latest` it runs that same image
+forever and never notices a new one — there is no update button for custom apps
+to tell you otherwise. A version tag never moves, so changing it is a reference
+TrueNAS has not pulled before and it always fetches. That makes
+[updating](#updating) a one-field edit.
+
+Current version and the full tag list:
+<https://github.com/eggprez/garminpodcast/pkgs/container/garminpodcast>
 
 > **TrueNAS 25.10 and newer** require the top-level `services:` key shown above.
 > Use absolute host paths — relative paths like `./data` do not resolve
@@ -179,34 +183,46 @@ its charger, on Wi-Fi, and it will pull down episodes.
 Your data, feeds and token all live in the dataset and survive updates
 untouched, whichever method you use.
 
-The catch: TrueNAS defaults its image pull policy to **`IfNotPresent`**. Once it
-has a copy of `:latest`, it will keep running that copy indefinitely and the
-**Update** button will not offer anything, because from its point of view the
-tag has not changed. Any of these gets you the new build.
+### The easy way: bump the version tag
 
-### Best: let it always re-check
+**Apps → Installed → garminpodcast → Edit**, change the version, **Save**:
 
-Edit the app and make sure the service has:
+```yaml
+    image: ghcr.io/eggprez/garminpodcast:v1.0.1
+```
+
+TrueNAS has never pulled that reference, so it fetches and redeploys. No shell,
+no cache to fight. Released versions are listed at
+<https://github.com/eggprez/garminpodcast/pkgs/container/garminpodcast>.
+
+This is why the install uses a version tag rather than `:latest`. With
+`:latest`, TrueNAS's default `IfNotPresent` pull policy means it keeps running
+whatever it cached first, forever, and custom apps get no update notification to
+tell you otherwise.
+
+### If you are stuck on :latest
+
+Either switch to a version tag as above, or add this to the service so every
+restart re-checks the registry:
 
 ```yaml
     pull_policy: always
 ```
 
-Now every restart re-checks the registry. **Apps → Installed → garminpodcast →
-Restart** is then all an update takes. The only downside is that a restart needs
-the registry reachable.
+Then **Restart** is enough. The trade-off is that restarts now need the registry
+reachable.
 
-### Force one update right now
+### When the cache will not let go
 
-Pin to the exact build instead of a moving tag. TrueNAS sees a reference it has
-never pulled, so it fetches it:
+Nuclear option — remove the local copy so there is nothing to fall back on.
+Stop the app, then in **System → Shell**:
 
-```yaml
-    image: ghcr.io/eggprez/garminpodcast:sha-20de41d
+```bash
+docker rmi ghcr.io/eggprez/garminpodcast:latest
 ```
 
-Save, and it deploys. This doubles as proper version pinning — you can always
-read the running build back out with `docker inspect` (see below).
+Start the app again and it must pull. If it complains the image is in use, the
+app did not stop: `docker rm -f garminpodcast` first.
 
 ### From the shell
 
