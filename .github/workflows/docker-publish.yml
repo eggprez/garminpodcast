@@ -34,9 +34,13 @@ jobs:
         with:
           # Lowercased automatically, which matters since the repo name is not.
           images: ${{ env.REGISTRY }}/${{ github.repository }}
+          # Version tags are the ones to point a deployment at. They never move,
+          # so bumping the tag in a UI always triggers a real pull -- unlike
+          # :latest, which Docker happily serves from cache forever.
           tags: |
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=tag
             type=sha,format=short
 
       # linux/amd64 only: TrueNAS SCALE is x86_64, and cross-building the
