@@ -15,3 +15,6 @@ watch/bin/
 *.prg
 *.prg.debug.xml
 *.iq
+
+# Baked-in watch config: contains a live API token
+watch/resources-local/

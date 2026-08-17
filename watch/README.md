@@ -121,15 +121,47 @@ narrowing to read `getId()`.
 
 ## Settings
 
-Set in **Garmin Connect Mobile → Devices → your watch → Connect IQ Apps →
-Podcasts → Settings** — not on the watch, so you never type a long token on a
-five-button interface.
-
 | Setting | Notes |
 |---|---|
-| Server URL | `https://…`, no trailing slash needed. Must be a publicly valid certificate |
+| Server URL | `https://…`, trailing slash optional. Must be a publicly trusted certificate |
 | API token | From the server's **Watch setup** page |
 | Episodes to sync | 1–50, default 10 |
+
+How you set these depends entirely on how the app got onto the watch.
+
+### Sideloaded builds: bake them in
+
+**Garmin only exposes Connect IQ app settings in the phone app for apps
+installed from the Connect IQ Store.** A sideloaded `.prg` gets no settings
+screen at all — the app appears under Connect IQ Apps but tapping into it shows
+nothing to configure. A `.SET` file does appear in `/GARMIN/Apps/SETTINGS` on
+the device, but it is not usefully editable by hand.
+
+So for a sideloaded build the configuration is compiled in:
+
+```bash
+./configure.sh https://podcasts.example.com <api-token>
+monkeyc -f monkey.jungle -o bin/GarminPodcast.prg -y ~/.ciq/developer_key.der -d fenix7
+```
+
+Copy the rebuilt `.prg` to `GARMIN/APPS/` and the app starts up already
+pointed at your server.
+
+`configure.sh` writes `resources-local/properties/properties.xml`, which
+`monkey.jungle` layers over `resources/`. That path is git-ignored, so your
+token never reaches a tracked file — worth caring about given this repo is
+public. Re-run it and rebuild whenever you rotate the token.
+
+Changing settings means rebuilding and re-copying. That is the trade-off for
+not publishing to the store.
+
+### Store installs: use the phone
+
+If the app is ever published to the Connect IQ Store, the settings defined in
+`resources/settings/settings.xml` show up under **Garmin Connect → Devices →
+your watch → Connect IQ Apps → Podcasts → Settings**, and `configure.sh`
+becomes unnecessary. Entering a long token on the phone beats doing it on a
+five-button watch, which is why that path exists.
 
 ## Syncing
 
