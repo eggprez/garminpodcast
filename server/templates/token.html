@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Watch setup — GarminPodcast{% endblock %}
+{% block content %}
+<h2>Watch setup</h2>
+<p class="muted" style="margin-top:0;">
+  Open <strong>Garmin Connect Mobile → Devices → your watch → Connect IQ Apps →
+  GarminPodcast → Settings</strong> and paste these two values. The watch never asks
+  you to type them on the device itself.
+</p>
+
+<div class="panel" style="padding:16px;">
+  <p style="margin:0 0 6px;"><strong>Server URL</strong></p>
+  <pre style="margin:0 0 18px;"><code>{{ base_url }}</code></pre>
+
+  <p style="margin:0 0 6px;"><strong>API token</strong></p>
+  <pre style="margin:0;"><code>{{ token }}</code></pre>
+</div>
+
+<p class="muted" style="font-size:13px;">
+  The token is the only credential the watch holds. Rotating it immediately locks out
+  the current watch app until you paste the new value.
+</p>
+<form method="post" action="/token/regenerate"
+      onsubmit="return confirm('Rotate the API token? The watch will stop syncing until you update its settings.');">
+  <button type="submit" class="danger">Rotate token</button>
+</form>
+
+<h2>Requirements</h2>
+<ul class="muted" style="font-size:14px;">
+  <li>The server URL must be <strong>HTTPS with a publicly valid certificate</strong>.
+      Connect IQ rejects self-signed certificates outright.</li>
+  <li>Syncing happens over <strong>Wi-Fi only</strong> — the watch will not download
+      episodes over Bluetooth.</li>
+</ul>
+{% endblock %}

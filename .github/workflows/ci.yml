@@ -1,0 +1,52 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  server:
+    name: Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # The media pipeline shells out to both binaries.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install httpx
+
+      - name: Core logic (RSS, retention, transcode decisions)
+        run: python tests/test_core.py
+
+      - name: HTTP API and web UI
+        run: python tests/test_api.py
+
+      - name: Docker image builds
+        run: docker build -t garminpodcast:ci .
+
+  watch:
+    name: Watch app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Static checks only. Compiling Monkey C needs the Connect IQ SDK, which
+      # is not redistributable, so it cannot run in CI.
+      - name: Static checks (resources, symbols, manifest)
+        run: python tests/check_watch.py

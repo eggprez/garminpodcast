@@ -1,0 +1,16 @@
+# Only server/ and requirements.txt are needed to build the image.
+.git
+.github
+.gitignore
+.env
+data/
+tests/
+watch/
+*.md
+!README.md
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store

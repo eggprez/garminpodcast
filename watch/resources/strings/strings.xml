@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<strings>
+    <string id="AppName">Podcasts</string>
+
+    <!-- App settings, edited in Garmin Connect Mobile -->
+    <string id="SettingServerUrl">Server URL</string>
+    <string id="SettingApiToken">API token</string>
+    <string id="SettingEpisodeLimit">Episodes to sync</string>
+
+    <!-- Browse / playback -->
+    <string id="MenuEpisodes">Episodes</string>
+    <string id="MenuNoEpisodes">No episodes</string>
+    <string id="MenuNoEpisodesSub">Sync from the music menu</string>
+    <string id="MenuResume">Resume</string>
+    <string id="MenuStartOver">Start over</string>
+    <string id="MenuStartOverSub">From the beginning</string>
+    <string id="MenuTimeLeft">Time left</string>
+    <string id="MenuHowFar">How far in?</string>
+
+    <!-- Sync -->
+    <string id="SyncStatus">Status</string>
+    <string id="SyncNotConfigured">Not configured</string>
+    <string id="SyncNotConfiguredSub">Set URL and token in the phone app</string>
+    <string id="SyncCheckServer">Check server</string>
+    <string id="SyncReady">Ready</string>
+    <string id="SyncChecking">Checking...</string>
+    <string id="SyncOnDevice">On this watch</string>
+    <string id="SyncErrNoConfig">Set the server URL and token in Garmin Connect</string>
+    <string id="SyncErrNetwork">Could not reach the server</string>
+    <string id="SyncErrAuth">Token rejected - check the phone app</string>
+    <string id="SyncErrNoEpisodes">Server has no episodes ready</string>
+</strings>

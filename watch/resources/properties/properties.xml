@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<properties>
+    <property id="serverUrl" type="string"></property>
+    <property id="apiToken" type="string"></property>
+    <property id="episodeLimit" type="number">10</property>
+</properties>

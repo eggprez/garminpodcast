@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Sign in — GarminPodcast{% endblock %}
+{% block header %}{% endblock %}
+{% block content %}
+<div style="max-width:340px;margin:14vh auto;">
+  <h1 style="font-size:20px;margin:0 0 4px;">GarminPodcast</h1>
+  <p class="muted" style="margin:0 0 22px;">Sign in to manage your feeds.</p>
+  {% if error %}<div class="warn">{{ error }}</div>{% endif %}
+  <form method="post" action="/login">
+    <div style="display:grid;gap:10px;">
+      <input type="text" name="username" placeholder="Username" autocomplete="username" autofocus required style="min-width:0;">
+      <input type="password" name="password" placeholder="Password" autocomplete="current-password" required style="min-width:0;">
+      <button type="submit" style="padding:9px;">Sign in</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
