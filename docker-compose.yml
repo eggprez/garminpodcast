@@ -1,8 +1,8 @@
 services:
   garminpodcast:
     build: .
-    # Or pull a published image instead of building locally:
-    # image: ghcr.io/YOURUSER/garminpodcast:latest
+    # Or pull the published image instead of building locally:
+    # image: ghcr.io/eggprez/garminpodcast:latest
     container_name: garminpodcast
     restart: unless-stopped
     ports:

@@ -1,5 +1,8 @@
 # GarminPodcast
 
+[![Tests](https://github.com/eggprez/garminpodcast/actions/workflows/ci.yml/badge.svg)](https://github.com/eggprez/garminpodcast/actions/workflows/ci.yml)
+[![Publish container image](https://github.com/eggprez/garminpodcast/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/eggprez/garminpodcast/actions/workflows/docker-publish.yml)
+
 A self-hosted podcast cache for Garmin music watches, in two parts:
 
 1. **Server** — a Docker container that follows your RSS feeds, downloads new
@@ -33,6 +36,16 @@ The server never tracks playback position — that is entirely watch-side, in
 ## Part 1 — Server
 
 ### Quick start
+
+Every push to `main` publishes an image, so on TrueNAS you can skip the build
+entirely — set `image: ghcr.io/eggprez/garminpodcast:latest` in
+`docker-compose.yml` (the line is already there, commented) and drop `build: .`:
+
+```bash
+docker pull ghcr.io/eggprez/garminpodcast:latest
+```
+
+To run from source instead:
 
 ```bash
 cp .env.example .env
