@@ -61,6 +61,16 @@ available on the container's PATH.</div>
     — {{ total.n }} ready, {{ total.bytes | size }}, kept {{ settings.retention_days }} days
   </span>
 </h2>
+
+{% set failed = episodes | selectattr('state', 'equalto', 'error') | list | length %}
+{% if failed %}
+<form method="post" action="/episodes/retry-failed" style="margin-bottom:12px;">
+  <button type="submit">Retry all {{ failed }} failed</button>
+  <span class="muted" style="font-size:13px;margin-left:8px;">
+    Clears the error and downloads again from scratch.
+  </span>
+</form>
+{% endif %}
 <div class="panel">
   <table>
     <tr>
@@ -84,7 +94,9 @@ available on the container's PATH.</div>
           <button type="submit" class="danger">Delete</button>
         </form>
         {% elif e.state == 'error' %}
-        <span class="muted" title="{{ e.error }}" style="font-size:12px;">hover for detail</span>
+        <form class="inline" method="post" action="/episodes/{{ e.ref_id }}/retry">
+          <button type="submit" title="{{ e.error }}">Retry</button>
+        </form>
         {% endif %}
       </td>
     </tr>

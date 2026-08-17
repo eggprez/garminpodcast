@@ -36,6 +36,9 @@ jobs:
       - name: Concurrent download passes
         run: python tests/test_concurrency.py
 
+      - name: Retry and retirement of failed episodes
+        run: python tests/test_retry.py
+
       - name: Docker image builds
         run: docker build -t garminpodcast:ci .
 

@@ -204,28 +204,91 @@ async def process_episode(ref_id: int) -> bool:
 
 
 async def _download_pass() -> int:
-    """One sweep over every feed, downloading whatever is missing."""
+    """One sweep over every feed, downloading whatever is missing.
+
+    Works newest-first towards a target of `episodes_per_feed` ready episodes
+    rather than counting free slots. Counting slots meant a feed that was
+    already at its quota skipped its queue entirely, so an episode that had
+    failed could never be retried and sat in the library showing a stale error
+    forever.
+    """
     done = 0
+    target = settings.episodes_per_feed
+
     for feed in db.query("SELECT id FROM feeds WHERE enabled = 1"):
-        ready = db.query_one(
+        feed_id = feed["id"]
+        row = db.query_one(
             "SELECT COUNT(*) AS n FROM episodes WHERE feed_id = ? AND state = 'ready'",
-            (feed["id"],),
+            (feed_id,),
         )
-        slots = settings.episodes_per_feed - (ready["n"] if ready else 0)
-        if slots <= 0:
-            continue
-        # Errored episodes are retried until MAX_ATTEMPTS so that a transient
-        # failure does not strand an episode forever.
-        queued = db.query(
-            "SELECT ref_id FROM episodes WHERE feed_id = ? "
-            "  AND (state = 'pending' OR (state = 'error' AND attempts < ?)) "
+        ready = row["n"] if row else 0
+
+        # Look past the target so one permanently broken episode cannot keep a
+        # feed short of its quota forever.
+        candidates = db.query(
+            "SELECT ref_id, state, attempts FROM episodes WHERE feed_id = ? "
             "ORDER BY published DESC LIMIT ?",
-            (feed["id"], MAX_ATTEMPTS, slots),
+            (feed_id, target * 3),
         )
-        for row in queued:
-            if await process_episode(row["ref_id"]):
+
+        for candidate in candidates:
+            if ready >= target:
+                break
+            if candidate["state"] in ("ready", "downloading"):
+                continue
+            if candidate["state"] == "error" and candidate["attempts"] >= MAX_ATTEMPTS:
+                continue
+            if await process_episode(candidate["ref_id"]):
+                ready += 1
                 done += 1
+
+        retire_unneeded(feed_id, ready >= target)
+
     return done
+
+
+def retire_unneeded(feed_id: int, quota_met: bool) -> int:
+    """Drop episodes we are never going to fetch out of the failure list.
+
+    An episode we do not want on disk should not sit in the library showing a
+    failure — nobody asked for it. 'skipped' keeps the row, so a later poll
+    does not rediscover it as new, while hiding it from the library view.
+
+    Once the feed has its quota everything still outstanding is surplus — but
+    only if we never actually tried it. An episode that was attempted and
+    failed stays visible as an error even when surplus, because that is a real
+    result the user may want to act on rather than something to bury.
+
+    Below quota, only what falls outside the candidate window is surplus.
+    """
+    if quota_met:
+        return db.execute_count(
+            "UPDATE episodes SET state = 'skipped', error = '' "
+            "WHERE feed_id = ? AND state IN ('pending', 'error') AND attempts = 0",
+            (feed_id,),
+        )
+    return db.execute_count(
+        "UPDATE episodes SET state = 'skipped', error = '' "
+        "WHERE feed_id = ? AND state IN ('pending', 'error') AND ref_id NOT IN ("
+        "  SELECT ref_id FROM episodes WHERE feed_id = ? "
+        "  ORDER BY published DESC LIMIT ?"
+        ")",
+        (feed_id, feed_id, settings.episodes_per_feed * 3),
+    )
+
+
+def retry_failed(ref_id: int | None = None) -> int:
+    """Put failed episodes back in the queue with a fresh attempt budget."""
+    if ref_id is None:
+        return db.execute_count(
+            "UPDATE episodes SET state = 'pending', attempts = 0, error = '' "
+            "WHERE state = 'error'"
+        )
+    return db.execute_count(
+        "UPDATE episodes SET state = 'pending', attempts = 0, error = '' "
+        "WHERE ref_id = ? AND state = 'error'",
+        (ref_id,),
+    )
 
 
 async def download_pending() -> int:

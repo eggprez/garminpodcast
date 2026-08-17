@@ -197,6 +197,24 @@ async def delete_episode(request: Request, ref_id: int):
     return _redirect()
 
 
+@router.post("/episodes/{ref_id}/retry")
+async def retry_episode(request: Request, ref_id: int):
+    if not is_logged_in(request):
+        return _redirect("/login")
+    media.retry_failed(ref_id)
+    asyncio.create_task(media.download_pending())
+    return _redirect()
+
+
+@router.post("/episodes/retry-failed")
+async def retry_all_failed(request: Request):
+    if not is_logged_in(request):
+        return _redirect("/login")
+    media.retry_failed()
+    asyncio.create_task(media.download_pending())
+    return _redirect()
+
+
 @router.get("/token", response_class=HTMLResponse)
 async def show_token(request: Request):
     if not is_logged_in(request):
