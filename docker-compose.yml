@@ -9,6 +9,11 @@ services:
     # To build from source instead of pulling, comment out `image:` above and
     # uncomment the line below.
     # build: .
+    #
+    # Without this, Docker keeps using the copy of :latest it already cached and
+    # never notices a new one. With it, every restart re-checks the registry.
+    # The cost is that a restart needs the registry reachable.
+    pull_policy: always
     container_name: garminpodcast
     restart: unless-stopped
     ports:

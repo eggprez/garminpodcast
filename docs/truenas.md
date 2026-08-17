@@ -47,6 +47,7 @@ changing only `/mnt/tank` to your pool:
 services:
   garminpodcast:
     image: ghcr.io/eggprez/garminpodcast:latest
+    pull_policy: always
     container_name: garminpodcast
     restart: unless-stopped
     ports:
@@ -58,6 +59,11 @@ services:
 That is the whole file. Every setting falls back to a working default, and the
 session key is generated on first boot and kept in `/data/secret.key` so
 restarts do not log you out.
+
+`pull_policy: always` matters more than it looks. TrueNAS defaults to
+`IfNotPresent`, so once it has cached a `:latest` it will happily run that same
+image forever and never notice a newer one. See
+[Updating](#updating) if you left it out.
 
 > **TrueNAS 25.10 and newer** require the top-level `services:` key shown above.
 > Use absolute host paths — relative paths like `./data` do not resolve
@@ -170,11 +176,57 @@ its charger, on Wi-Fi, and it will pull down episodes.
 
 ## Updating
 
-**Apps → Installed → garminpodcast → ⋮ → Update** pulls the newest
-`:latest` image. Your data, feeds and token are all in the dataset and survive
-updates untouched.
+Your data, feeds and token all live in the dataset and survive updates
+untouched, whichever method you use.
 
-To pin a version instead, replace `:latest` with a tag like `:sha-5b501ee`.
+The catch: TrueNAS defaults its image pull policy to **`IfNotPresent`**. Once it
+has a copy of `:latest`, it will keep running that copy indefinitely and the
+**Update** button will not offer anything, because from its point of view the
+tag has not changed. Any of these gets you the new build.
+
+### Best: let it always re-check
+
+Edit the app and make sure the service has:
+
+```yaml
+    pull_policy: always
+```
+
+Now every restart re-checks the registry. **Apps → Installed → garminpodcast →
+Restart** is then all an update takes. The only downside is that a restart needs
+the registry reachable.
+
+### Force one update right now
+
+Pin to the exact build instead of a moving tag. TrueNAS sees a reference it has
+never pulled, so it fetches it:
+
+```yaml
+    image: ghcr.io/eggprez/garminpodcast:sha-20de41d
+```
+
+Save, and it deploys. This doubles as proper version pinning — you can always
+read the running build back out with `docker inspect` (see below).
+
+### From the shell
+
+**System → Shell**, refresh the cached tag and recreate the container:
+
+```bash
+docker pull ghcr.io/eggprez/garminpodcast:latest
+```
+
+Then **Apps → Installed → garminpodcast → Restart**. The restart recreates the
+container from the image you just pulled.
+
+### Confirming which build is actually running
+
+```bash
+docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' garminpodcast
+```
+
+That prints the git commit the image was built from. Compare it against the
+latest commit on `main` to know whether you are current.
 
 ## Backups
 
