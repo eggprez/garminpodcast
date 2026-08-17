@@ -1,6 +1,7 @@
 using Toybox.Communications;
 using Toybox.Lang;
 using Toybox.Media;
+using Toybox.PersistedContent;
 using Toybox.WatchUi;
 
 //! Pulls the episode list from the server, then downloads whatever is missing.
@@ -67,7 +68,7 @@ class PodcastSyncDelegate extends Communications.SyncDelegate {
         Communications.notifySyncComplete(null);
     }
 
-    function onEpisodeList(responseCode, data) {
+    function onEpisodeList(responseCode as Lang.Number, data as Lang.Dictionary or Lang.String or PersistedContent.Iterator or Null) as Void {
         if (mCancelled) {
             return;
         }
@@ -89,7 +90,7 @@ class PodcastSyncDelegate extends Communications.SyncDelegate {
 
         for (var i = 0; i < episodes.size(); i++) {
             var episode = episodes[i];
-            if (episode instanceof Lang.Dictionary && !Store.has(episode["i"])) {
+            if (episode instanceof Lang.Dictionary && !Store.hasServerId(episode["i"])) {
                 mQueue.add(episode);
             }
         }
@@ -141,7 +142,7 @@ class PodcastSyncDelegate extends Communications.SyncDelegate {
     //! `data` is a Media.ContentRef the system created for the cached audio.
     //! Its id is assigned by the system, so this is the only moment we can
     //! learn it - hence storing the mapping to our server id right here.
-    function onAudioDownloaded(responseCode, data) {
+    function onAudioDownloaded(responseCode as Lang.Number, data as Lang.Dictionary or Lang.String or PersistedContent.Iterator or Null) as Void {
         if (mCancelled) {
             return;
         }
@@ -150,8 +151,11 @@ class PodcastSyncDelegate extends Communications.SyncDelegate {
             var episode = mCurrent;
             var title = episode["t"];
             var show = episode["n"];
+            // An audio response is a Media.ContentRef, which is absent from the
+            // SDK's declared callback type, so widen through Object to narrow.
+            var ref = (data as Lang.Object) as Media.ContentRef;
             Store.add(
-                data.getId(),
+                ref.getId(),
                 title instanceof Lang.String ? title : "Episode",
                 show instanceof Lang.String ? show : "",
                 episode["d"] instanceof Lang.Number ? episode["d"] : 0,

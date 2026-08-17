@@ -60,7 +60,7 @@ module Store {
         return ids;
     }
 
-    function has(serverId) {
+    function hasServerId(serverId) {
         var ids = downloadedServerIds();
         for (var i = 0; i < ids.size(); i++) {
             if (ids[i] == serverId) {

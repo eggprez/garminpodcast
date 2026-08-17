@@ -1,5 +1,6 @@
 using Toybox.Communications;
 using Toybox.Lang;
+using Toybox.PersistedContent;
 using Toybox.WatchUi;
 
 //! Shown from the provider's sync settings. Reports what is on the watch and
@@ -85,7 +86,7 @@ class SyncConfigMenuDelegate extends WatchUi.Menu2InputDelegate {
         );
     }
 
-    function onPing(responseCode, data) {
+    function onPing(responseCode as Lang.Number, data as Lang.Dictionary or Lang.String or PersistedContent.Iterator or Null) as Void {
         var text;
         if (responseCode == 200 && data instanceof Lang.Dictionary) {
             var available = data["eps"];

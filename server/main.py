@@ -40,6 +40,17 @@ async def lifespan(app: FastAPI):
     if not media.ffmpeg_available():
         log.error("ffmpeg/ffprobe not found on PATH — downloads will fail")
 
+    if settings.uses_default_password:
+        log.warning(
+            "=" * 72 + "\n"
+            "  Running with the DEFAULT password (%s / %s).\n"
+            "  Fine on a LAN. Set PODCAST_ADMIN_PASSWORD before exposing this\n"
+            "  server to the internet through your reverse proxy.\n"
+            + "=" * 72,
+            settings.admin_user,
+            settings.admin_password,
+        )
+
     scheduler.add_job(
         poll_cycle,
         "interval",
@@ -75,7 +86,7 @@ app.add_middleware(
     session_cookie="gp_session",
     max_age=14 * 86400,
     same_site="lax",
-    https_only=os.environ.get("PODCAST_COOKIE_SECURE", "false").lower() == "true",
+    https_only=settings.cookie_secure,
 )
 
 app.include_router(api.router)

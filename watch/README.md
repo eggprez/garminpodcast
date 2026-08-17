@@ -60,22 +60,31 @@ keeps the server id alongside purely so a re-sync knows what it already has.
 
 ## Building
 
-Requires the Connect IQ SDK and a JRE. Put the SDK's `bin` on your `PATH`:
+Verified against **Connect IQ SDK 9.2.0** with **OpenJDK 26**. All 15 declared
+products compile; the exported package covers 25 device variants.
+
+`monkeyc` is a Java tool, so you need a JRE:
 
 ```bash
-export PATH="$HOME/Library/Application Support/Garmin/ConnectIQ/Sdks/connectiq-sdk-mac-9.2.0-2026-06-09-92a1605b2/bin:$PATH"
+brew install openjdk
 ```
 
-Generate a developer key once (keep it private — never commit it):
+Put both the JDK and the SDK's `bin` on your `PATH` (adjust the SDK version):
 
 ```bash
-openssl genrsa -out ~/.ssh/ciq_developer_key.pem 4096 && openssl pkcs8 -topk8 -inform PEM -outform DER -nocrypt -in ~/.ssh/ciq_developer_key.pem -out ~/.ssh/ciq_developer_key.der
+export PATH="/opt/homebrew/opt/openjdk/bin:$HOME/Library/Application Support/Garmin/ConnectIQ/Sdks/connectiq-sdk-mac-9.2.0-2026-06-09-92a1605b2/bin:$PATH"
 ```
 
-Build for your device:
+Generate a developer key once. Keep it outside the repo — it is a private key:
 
 ```bash
-monkeyc -f monkey.jungle -o bin/GarminPodcast.prg -y ~/.ssh/ciq_developer_key.der -d fenix7
+mkdir -p ~/.ciq && openssl genrsa -out ~/.ciq/developer_key.pem 4096 && openssl pkcs8 -topk8 -inform PEM -outform DER -nocrypt -in ~/.ciq/developer_key.pem -out ~/.ciq/developer_key.der && chmod 600 ~/.ciq/developer_key.*
+```
+
+Build for one device:
+
+```bash
+monkeyc -f monkey.jungle -o bin/GarminPodcast.prg -y ~/.ciq/developer_key.der -d fenix7
 ```
 
 Run in the simulator:
@@ -84,17 +93,31 @@ Run in the simulator:
 connectiq && monkeydo bin/GarminPodcast.prg fenix7
 ```
 
-Package for sideloading:
+Build the distributable package for every supported device:
 
 ```bash
-monkeyc -f monkey.jungle -o bin/GarminPodcast.iq -y ~/.ssh/ciq_developer_key.der -e
+monkeyc -f monkey.jungle -o bin/GarminPodcast.iq -y ~/.ciq/developer_key.der -e
 ```
 
-Then copy the `.prg` to `GARMIN/APPS/` on the watch over USB.
+To sideload, copy the per-device `.prg` to `GARMIN/APPS/` on the watch over USB.
 
-If the compiler rejects a product id in `manifest.xml`, that device is unknown
-to your SDK version — remove it, or check `<SDK>/bin/devices.xml` for the
-authoritative list.
+If the compiler rejects a product id, that device is unknown to your SDK
+version. The authoritative list is the directory names under
+`~/Library/Application Support/Garmin/ConnectIQ/Devices/`.
+
+### Two things the compiler enforces
+
+Worth knowing before editing the sources, because neither is obvious:
+
+- **`hidden` is a class-member modifier only.** Module-level functions cannot
+  use it — `Config` and `Store` are modules, so their functions are all plain.
+- **`has` is a reserved operator** (the API-availability check), so it cannot be
+  a method name. That is why the lookup is `Store.hasServerId()`.
+
+Web-request callbacks also need full Monkey Types annotations. The audio
+download hands back a `Media.ContentRef`, which is *not* in the SDK's declared
+callback type, so `PodcastSyncDelegate` widens through `Lang.Object` before
+narrowing to read `getId()`.
 
 ## Settings
 

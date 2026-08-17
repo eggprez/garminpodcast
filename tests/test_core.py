@@ -133,5 +133,36 @@ check("rotation changes it", regenerate_api_token() != t1)
 check("correct password accepted", check_admin_password("test-pw"))
 check("wrong password rejected", not check_admin_password("nope"))
 
+print("\n-- zero-config startup (no env vars at all) --")
+import subprocess
+probe = """
+import sys, tempfile, pathlib
+sys.path.insert(0, %r)
+import os
+os.environ["PODCAST_DATA_DIR"] = tempfile.mkdtemp()
+from server.config import settings
+assert settings.admin_user == "admin", settings.admin_user
+assert settings.admin_password == "changeme"
+assert settings.uses_default_password is True
+assert settings.retention_days == 14
+assert settings.episodes_per_feed == 5
+assert settings.transcode_mode == "auto"
+assert len(settings.secret_key) > 20
+# The generated key must persist across a second load.
+key_file = settings.data_dir / "secret.key"
+assert key_file.exists(), "secret.key not written"
+assert key_file.read_text().strip() == settings.secret_key
+assert oct(key_file.stat().st_mode)[-3:] == "600", oct(key_file.stat().st_mode)
+print("OK")
+""" % str(pathlib.Path(__file__).resolve().parent.parent)
+
+clean_env = {k: v for k, v in os.environ.items() if not k.startswith("PODCAST_")}
+clean_env["PATH"] = os.environ.get("PATH", "")
+res = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, env=clean_env)
+check("starts with no PODCAST_* env vars and sane defaults",
+      res.returncode == 0 and "OK" in res.stdout)
+if res.returncode != 0:
+    print("    " + (res.stderr.strip().splitlines() or ["?"])[-1])
+
 print("\n" + ("ALL PASS" if not fails else f"{len(fails)} FAILURE(S): {fails}"))
 sys.exit(1 if fails else 0)

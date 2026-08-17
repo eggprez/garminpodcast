@@ -17,7 +17,7 @@ module Config {
     //! come back offering to resume the closing credits.
     const COMPLETE_MARGIN_SECONDS = 45;
 
-    hidden function getProp(key, fallback) {
+    function getProp(key, fallback) {
         var value = null;
         try {
             value = Application.Properties.getValue(key);
@@ -64,7 +64,7 @@ module Config {
         return { "Authorization" => "Bearer " + apiToken() };
     }
 
-    hidden function trim(text) {
+    function trim(text) {
         var start = 0;
         var end = text.length();
         while (start < end && text.substring(start, start + 1).equals(" ")) {

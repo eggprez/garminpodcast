@@ -37,42 +37,35 @@ The server never tracks playback position — that is entirely watch-side, in
 
 ### Quick start
 
-Every push to `main` publishes an image, so on TrueNAS you can skip the build
-entirely — set `image: ghcr.io/eggprez/garminpodcast:latest` in
-`docker-compose.yml` (the line is already there, commented) and drop `build: .`:
+No configuration file, no password to invent — every setting has a working
+default:
 
 ```bash
-docker pull ghcr.io/eggprez/garminpodcast:latest
+docker compose up -d
 ```
 
-To run from source instead:
+Then open `http://your-host:8080` and sign in with **admin / changeme**. Add
+RSS URLs; the first poll runs 15 seconds after boot, then hourly.
 
-```bash
-cp .env.example .env
-```
+**On TrueNAS SCALE, follow [docs/truenas.md](docs/truenas.md)** — a paste-ready
+walkthrough from dataset to watch pairing.
 
-Edit `.env` (at minimum `PODCAST_ADMIN_PASSWORD` and `PODCAST_SECRET_KEY`), then:
+To build from source instead of pulling the published image, swap `image:` for
+`build: .` in `docker-compose.yml`.
 
-```bash
-docker compose up -d --build
-```
-
-Open `http://your-host:8080`, sign in, and add RSS URLs. The first poll runs
-15 seconds after boot, then every `PODCAST_REFRESH_MINUTES`.
-
-Generate a secret key with:
-
-```bash
-openssl rand -hex 32
-```
+> Change `PODCAST_ADMIN_PASSWORD` before exposing this to the internet. Until
+> you do, the web UI shows a warning banner and the startup log says the same.
+> Everything else can stay untouched.
 
 ### Configuration
+
+All optional. Set only what you want to change.
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `PODCAST_ADMIN_USER` | `admin` | Web UI username |
-| `PODCAST_ADMIN_PASSWORD` | *(required)* | Web UI password; the server refuses to start without it |
-| `PODCAST_SECRET_KEY` | random | Signs session cookies. Unset means a new key each restart, logging you out |
+| `PODCAST_ADMIN_PASSWORD` | `changeme` | Web UI password. Change before exposing publicly |
+| `PODCAST_SECRET_KEY` | auto | Signs session cookies. Generated on first boot and persisted to `/data/secret.key`, so restarts keep you logged in. Set explicitly only for multiple replicas |
 | `PODCAST_BASE_URL` | — | Public HTTPS address, shown on the watch-setup page |
 | `PODCAST_COOKIE_SECURE` | `false` | Set `true` once you only reach the server over HTTPS |
 | `PODCAST_RETENTION_DAYS` | `14` | How long the **server** keeps audio (the watch keeps its own copies 2 days) |
@@ -99,13 +92,16 @@ In `auto` mode a clean, reasonably-sized MP3 is only *stream-copied*
 bitrate) is re-encoded to mono at the target bitrate, which also cuts file size
 roughly 3–5× so more episodes fit on the watch.
 
-### TrueNAS notes
+### TrueNAS
 
-The container runs unprivileged as UID 1000. For a bind mount, the host
-directory's ownership wins, so:
+Full walkthrough: **[docs/truenas.md](docs/truenas.md)**.
+
+The one thing that catches everyone: the container runs unprivileged as UID
+1000, and for a bind mount the host directory's ownership wins. Get this wrong
+and the app starts then immediately dies.
 
 ```bash
-chown -R 1000:1000 /mnt/pool/apps/garminpodcast/data
+chown -R 1000:1000 /mnt/tank/garminpodcast/data
 ```
 
 ### Reverse proxy

@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 
+{% if settings.uses_default_password %}
+<div class="warn"><strong>Default password in use.</strong> Anyone who can reach this
+page can sign in. Set <code>PODCAST_ADMIN_PASSWORD</code> and restart before exposing
+the server to the internet.</div>
+{% endif %}
+
 {% if not ffmpeg_ok %}
 <div class="warn"><strong>ffmpeg not found.</strong> Downloads will fail until it is
 available on the container's PATH.</div>

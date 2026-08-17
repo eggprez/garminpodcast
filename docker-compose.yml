@@ -1,8 +1,14 @@
+# Runs as-is with no .env file and no edits.
+#
+# Every setting below is optional and falls back to the image default. The only
+# one you should change before putting this on the internet is
+# PODCAST_ADMIN_PASSWORD.
 services:
   garminpodcast:
-    build: .
-    # Or pull the published image instead of building locally:
-    # image: ghcr.io/eggprez/garminpodcast:latest
+    image: ghcr.io/eggprez/garminpodcast:latest
+    # To build from source instead of pulling, comment out `image:` above and
+    # uncomment the line below.
+    # build: .
     container_name: garminpodcast
     restart: unless-stopped
     ports:
@@ -10,15 +16,13 @@ services:
     volumes:
       - ./data:/data
     environment:
-      # --- required ---
+      # --- web UI login ---
       PODCAST_ADMIN_USER: "${PODCAST_ADMIN_USER:-admin}"
-      PODCAST_ADMIN_PASSWORD: "${PODCAST_ADMIN_PASSWORD:?set this in .env}"
-      # Keeps you logged in across restarts; generate with `openssl rand -hex 32`.
-      PODCAST_SECRET_KEY: "${PODCAST_SECRET_KEY:?set this in .env}"
+      PODCAST_ADMIN_PASSWORD: "${PODCAST_ADMIN_PASSWORD:-changeme}"
 
       # --- public address, shown on the watch-setup page ---
       PODCAST_BASE_URL: "${PODCAST_BASE_URL:-}"
-      # Set true once you are reaching this only over HTTPS.
+      # Set true once you reach this only over HTTPS.
       PODCAST_COOKIE_SECURE: "${PODCAST_COOKIE_SECURE:-false}"
 
       # --- library behaviour ---

@@ -20,8 +20,25 @@ RUN useradd --uid 1000 --create-home appuser \
 USER appuser
 
 VOLUME ["/data"]
+
+# Every setting has a usable default, so the container runs with no environment
+# configuration at all. Override any of them at deploy time.
+#
+# PODCAST_SECRET_KEY is deliberately absent: it is generated on first boot and
+# persisted to /data/secret.key, so sessions survive restarts on their own.
 ENV PODCAST_DATA_DIR=/data \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PODCAST_ADMIN_USER=admin \
+    PODCAST_ADMIN_PASSWORD=changeme \
+    PODCAST_BASE_URL="" \
+    PODCAST_COOKIE_SECURE=false \
+    PODCAST_RETENTION_DAYS=14 \
+    PODCAST_EPISODES_PER_FEED=5 \
+    PODCAST_REFRESH_MINUTES=60 \
+    PODCAST_TRANSCODE_MODE=auto \
+    PODCAST_MAX_BITRATE_KBPS=128 \
+    PODCAST_TARGET_BITRATE_KBPS=64 \
+    PODCAST_LOG_LEVEL=INFO
 
 EXPOSE 8080
 
