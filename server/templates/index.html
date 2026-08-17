@@ -12,97 +12,59 @@ the server to the internet.</div>
 available on the container's PATH.</div>
 {% endif %}
 
-<h2>Feeds</h2>
-<div class="panel">
-  <table>
-    <tr>
-      <th>Show</th><th class="num">Ready</th><th class="num">Queued</th>
-      <th>Last checked</th><th></th>
-    </tr>
-    {% for f in feeds %}
-    <tr>
-      <td>
-        {{ f.title or f.url }}
-        {% if f.last_error %}<div class="badge err" title="{{ f.last_error }}">error</div>{% endif %}
-        <div class="muted" style="font-size:12px;">{{ f.url }}</div>
-      </td>
-      <td class="num">{{ f.ready }}</td>
-      <td class="num">{{ f.pending }}</td>
-      <td class="num muted">{{ f.last_checked | ago }}</td>
-      <td class="num">
-        <form class="inline" method="post" action="/feeds/{{ f.id }}/refresh">
-          <button type="submit">Refresh</button>
-        </form>
-        <form class="inline" method="post" action="/feeds/{{ f.id }}/delete"
-              onsubmit="return confirm('Remove this feed and delete its downloaded audio?');">
-          <button type="submit" class="danger">Remove</button>
-        </form>
-      </td>
-    </tr>
-    {% else %}
-    <tr><td colspan="5" class="muted">No feeds yet — add an RSS URL below.</td></tr>
-    {% endfor %}
-  </table>
-</div>
-
-<form method="post" action="/feeds/add" style="margin-top:14px;">
-  <div class="row">
-    <input type="url" name="url" placeholder="https://example.com/podcast.rss" required>
-    <button type="submit">Add feed</button>
-    <span style="flex:1"></span>
-  </div>
-</form>
-<form method="post" action="/refresh" style="margin-top:10px;">
-  <button type="submit">Refresh all now</button>
-</form>
-
-<h2>Episodes on disk
+<h2>Library
   <span class="muted" style="text-transform:none;letter-spacing:0;">
-    — {{ total.n }} ready, {{ total.bytes | size }}, kept {{ settings.retention_days }} days
+    — {{ shows | length }} show{{ '' if shows | length == 1 else 's' }},
+    {{ total.n }} episode{{ '' if total.n == 1 else 's' }} on disk,
+    {{ total.bytes | size }}
   </span>
 </h2>
 
-{% set failed = episodes | selectattr('state', 'equalto', 'error') | list | length %}
-{% if failed %}
-<form method="post" action="/episodes/retry-failed" style="margin-bottom:12px;">
-  <button type="submit">Retry all {{ failed }} failed</button>
+{% if shows %}
+<div class="grid">
+  {% for s in shows %}
+  <div class="card">
+    <a class="cover" href="/feeds/{{ s.id }}">
+      {% if s.artwork_path %}
+        <img src="/artwork/{{ s.id }}" alt="" loading="lazy">
+      {% else %}
+        <div class="placeholder">♪</div>
+      {% endif %}
+    </a>
+    <div class="body">
+      <a href="/feeds/{{ s.id }}" class="name" style="color:inherit;">{{ s.title or s.url }}</a>
+      {% if s.author %}<div class="by">{{ s.author }}</div>{% endif %}
+      <div class="stats">
+        <span><span class="dot ok"></span> {{ s.ready }} ready</span>
+        {% if s.working %}<span><span class="dot work"></span> {{ s.working }} queued</span>{% endif %}
+        {% if s.failed %}<span><span class="dot err"></span> {{ s.failed }} failed</span>{% endif %}
+      </div>
+      {% if s.last_error %}
+      <div class="by" style="color:var(--danger);" title="{{ s.last_error }}">feed error</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="panel" style="padding:26px;text-align:center;" class="muted">
+  <p class="muted" style="margin:0;">No shows yet — add a podcast RSS URL below.</p>
+</div>
+{% endif %}
+
+<h2>Add a show</h2>
+<form method="post" action="/feeds/add">
+  <div class="row">
+    <input type="url" name="url" placeholder="https://example.com/podcast.rss" required
+           style="flex:1;min-width:280px;">
+    <button type="submit">Add</button>
+  </div>
+</form>
+<form method="post" action="/refresh" style="margin-top:10px;">
+  <button type="submit">Check all shows now</button>
   <span class="muted" style="font-size:13px;margin-left:8px;">
-    Clears the error and downloads again from scratch.
+    Runs automatically every {{ refresh_minutes }} min — change under
+    <a href="/settings">Settings</a>.
   </span>
 </form>
-{% endif %}
-<div class="panel">
-  <table>
-    <tr>
-      <th>Episode</th><th>Show</th><th class="num">Length</th>
-      <th class="num">Size</th><th class="num">State</th><th></th>
-    </tr>
-    {% for e in episodes %}
-    <tr>
-      <td>{{ e.title }}</td>
-      <td class="muted">{{ e.show }}</td>
-      <td class="num">{{ e.duration | duration }}</td>
-      <td class="num">{{ e.file_size | size }}</td>
-      <td class="num">
-        <span class="badge {% if e.state == 'ready' %}ok{% elif e.state == 'error' %}err{% endif %}">
-          {{ e.state }}
-        </span>
-      </td>
-      <td class="num">
-        {% if e.state == 'ready' %}
-        <form class="inline" method="post" action="/episodes/{{ e.ref_id }}/delete">
-          <button type="submit" class="danger">Delete</button>
-        </form>
-        {% elif e.state == 'error' %}
-        <form class="inline" method="post" action="/episodes/{{ e.ref_id }}/retry">
-          <button type="submit" title="{{ e.error }}">Retry</button>
-        </form>
-        {% endif %}
-      </td>
-    </tr>
-    {% else %}
-    <tr><td colspan="6" class="muted">Nothing downloaded yet.</td></tr>
-    {% endfor %}
-  </table>
-</div>
 {% endblock %}

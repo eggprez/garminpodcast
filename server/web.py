@@ -4,11 +4,11 @@ import asyncio
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from . import db, feeds, media
+from . import artwork, db, feeds, media, prefs, scheduler
 from .auth import check_admin_password, get_api_token, is_logged_in, regenerate_api_token
 from .config import settings
 
@@ -35,6 +35,11 @@ def _record_failure(ip: str) -> None:
 
 def _redirect(path: str = "/") -> RedirectResponse:
     return RedirectResponse(path, status_code=303)
+
+
+def _feed_page(row) -> str:
+    """Back to the show an episode belongs to, or the library if it is gone."""
+    return f"/feeds/{row['feed_id']}" if row else "/"
 
 
 def _fmt_duration(seconds: int) -> str:
@@ -101,25 +106,27 @@ async def logout(request: Request):
     return _redirect("/login")
 
 
+FEED_STATS = (
+    "SELECT f.*, "
+    "  (SELECT COUNT(*) FROM episodes e WHERE e.feed_id = f.id "
+    "   AND e.state = 'ready') AS ready, "
+    "  (SELECT COUNT(*) FROM episodes e WHERE e.feed_id = f.id "
+    "   AND e.state IN ('pending', 'downloading')) AS working, "
+    "  (SELECT COUNT(*) FROM episodes e WHERE e.feed_id = f.id "
+    "   AND e.state = 'error') AS failed, "
+    "  (SELECT COALESCE(SUM(file_size), 0) FROM episodes e WHERE e.feed_id = f.id "
+    "   AND e.state = 'ready') AS bytes "
+    "FROM feeds f "
+)
+
+
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def library(request: Request):
+    """The show library — one card per podcast."""
     if not is_logged_in(request):
         return _redirect("/login")
 
-    feed_rows = db.query(
-        "SELECT f.*, "
-        "  (SELECT COUNT(*) FROM episodes e WHERE e.feed_id = f.id "
-        "   AND e.state = 'ready') AS ready, "
-        "  (SELECT COUNT(*) FROM episodes e WHERE e.feed_id = f.id "
-        "   AND e.state = 'pending') AS pending "
-        "FROM feeds f ORDER BY f.title COLLATE NOCASE"
-    )
-    episodes = db.query(
-        "SELECT e.*, f.title AS show FROM episodes e "
-        "JOIN feeds f ON f.id = e.feed_id "
-        "WHERE e.state IN ('ready', 'downloading', 'error') "
-        "ORDER BY e.published DESC LIMIT 60"
-    )
+    shows = db.query(FEED_STATS + "ORDER BY f.title COLLATE NOCASE")
     total = db.query_one(
         "SELECT COUNT(*) AS n, COALESCE(SUM(file_size), 0) AS bytes "
         "FROM episodes WHERE state = 'ready'"
@@ -129,13 +136,73 @@ async def dashboard(request: Request):
         request,
         "index.html",
         {
-            "feeds": feed_rows,
-            "episodes": episodes,
+            "shows": shows,
             "total": total,
+            "refresh_minutes": prefs.refresh_minutes(),
             "settings": settings,
             "ffmpeg_ok": media.ffmpeg_available(),
         },
     )
+
+
+@router.get("/feeds/{feed_id}", response_class=HTMLResponse)
+async def show_detail(request: Request, feed_id: int):
+    """One show: its episodes and their individual states."""
+    if not is_logged_in(request):
+        return _redirect("/login")
+
+    show = db.query_one(FEED_STATS + "WHERE f.id = ?", (feed_id,))
+    if show is None:
+        return _redirect()
+
+    episodes = db.query(
+        "SELECT * FROM episodes WHERE feed_id = ? AND state != 'skipped' "
+        "ORDER BY published DESC LIMIT 100",
+        (feed_id,),
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "show.html",
+        {"show": show, "episodes": episodes, "settings": settings},
+    )
+
+
+@router.get("/artwork/{feed_id}")
+async def show_artwork(request: Request, feed_id: int):
+    if not is_logged_in(request):
+        return _redirect("/login")
+    path = artwork.artwork_file(feed_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail="no artwork")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    if not is_logged_in(request):
+        return _redirect("/login")
+    return templates.TemplateResponse(
+        request,
+        "settings.html",
+        {
+            "refresh_minutes": prefs.refresh_minutes(),
+            "min_refresh": prefs.MIN_REFRESH,
+            "max_refresh": prefs.MAX_REFRESH,
+            "next_run": scheduler.next_run(),
+            "settings": settings,
+            "saved": request.query_params.get("saved") == "1",
+        },
+    )
+
+
+@router.post("/settings")
+async def save_settings(request: Request, refresh_minutes: int = Form(15)):
+    if not is_logged_in(request):
+        return _redirect("/login")
+    applied = prefs.set_refresh_minutes(refresh_minutes)
+    scheduler.reschedule(applied)
+    return _redirect("/settings?saved=1")
 
 
 @router.post("/feeds/add")
@@ -170,7 +237,7 @@ async def refresh_feed(request: Request, feed_id: int):
         return _redirect("/login")
     await feeds.refresh_feed(feed_id)
     asyncio.create_task(media.download_pending())
-    return _redirect()
+    return _redirect(f"/feeds/{feed_id}")
 
 
 @router.post("/refresh")
@@ -186,7 +253,9 @@ async def refresh_all(request: Request):
 async def delete_episode(request: Request, ref_id: int):
     if not is_logged_in(request):
         return _redirect("/login")
-    row = db.query_one("SELECT file_path FROM episodes WHERE ref_id = ?", (ref_id,))
+    row = db.query_one(
+        "SELECT file_path, feed_id FROM episodes WHERE ref_id = ?", (ref_id,)
+    )
     if row and row["file_path"]:
         Path(row["file_path"]).unlink(missing_ok=True)
     db.execute(
@@ -194,16 +263,17 @@ async def delete_episode(request: Request, ref_id: int):
         "WHERE ref_id = ?",
         (ref_id,),
     )
-    return _redirect()
+    return _redirect(_feed_page(row))
 
 
 @router.post("/episodes/{ref_id}/retry")
 async def retry_episode(request: Request, ref_id: int):
     if not is_logged_in(request):
         return _redirect("/login")
+    row = db.query_one("SELECT feed_id FROM episodes WHERE ref_id = ?", (ref_id,))
     media.retry_failed(ref_id)
     asyncio.create_task(media.download_pending())
-    return _redirect()
+    return _redirect(_feed_page(row))
 
 
 @router.post("/episodes/retry-failed")
@@ -213,6 +283,15 @@ async def retry_all_failed(request: Request):
     media.retry_failed()
     asyncio.create_task(media.download_pending())
     return _redirect()
+
+
+@router.post("/feeds/{feed_id}/retry-failed")
+async def retry_feed_failed(request: Request, feed_id: int):
+    if not is_logged_in(request):
+        return _redirect("/login")
+    media.retry_failed(feed_id=feed_id)
+    asyncio.create_task(media.download_pending())
+    return _redirect(f"/feeds/{feed_id}")
 
 
 @router.get("/token", response_class=HTMLResponse)

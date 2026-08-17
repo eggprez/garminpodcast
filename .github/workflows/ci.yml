@@ -39,6 +39,9 @@ jobs:
       - name: Retry and retirement of failed episodes
         run: python tests/test_retry.py
 
+      - name: Library UI and runtime settings
+        run: python tests/test_ui.py
+
       - name: Docker image builds
         run: docker build -t garminpodcast:ci .
 

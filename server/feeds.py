@@ -9,7 +9,7 @@ import unicodedata
 import feedparser
 import httpx
 
-from . import db
+from . import artwork, db
 from .config import settings
 
 log = logging.getLogger(__name__)
@@ -46,6 +46,21 @@ def _pick_enclosure(entry) -> tuple[str, str] | None:
         if link.get("rel") == "enclosure" and any(h in mime for h in AUDIO_HINTS):
             return link.get("href", ""), mime
     return None
+
+
+def _publisher(feed) -> str:
+    """The show's publisher, however this particular feed spells it.
+
+    feedparser folds itunes:author and managingEditor into `author`, but plenty
+    of feeds only carry one of the alternatives.
+    """
+    for key in ("author", "publisher", "itunes_author"):
+        value = feed.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:120]
+    detail = feed.get("publisher_detail") or feed.get("author_detail") or {}
+    name = detail.get("name", "") if isinstance(detail, dict) else ""
+    return name.strip()[:120]
 
 
 def _entry_guid(entry, url: str) -> str:
@@ -93,15 +108,19 @@ async def refresh_feed(feed_id: int) -> int:
         return 0
 
     title = (parsed.feed.get("title") or feed["title"] or feed["url"]).strip()
+    author = _publisher(parsed.feed)
     image = ""
     if parsed.feed.get("image"):
         image = parsed.feed["image"].get("href", "")
 
     db.execute(
-        "UPDATE feeds SET title = ?, image_url = ?, last_checked = ?, last_error = '' "
-        "WHERE id = ?",
-        (title, image, db.now(), feed_id),
+        "UPDATE feeds SET title = ?, author = ?, image_url = ?, last_checked = ?, "
+        "last_error = '' WHERE id = ?",
+        (title, author, image, db.now(), feed_id),
     )
+
+    if image:
+        await artwork.cache_artwork(feed_id, image)
 
     # Only consider the newest N; older ones would just be downloaded and then
     # immediately aged out by retention.

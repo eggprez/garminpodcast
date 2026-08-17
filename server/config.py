@@ -107,7 +107,7 @@ class Settings:
             cookie_secure=_bool("PODCAST_COOKIE_SECURE", False),
             retention_days=_int("PODCAST_RETENTION_DAYS", 14),
             episodes_per_feed=_int("PODCAST_EPISODES_PER_FEED", 5),
-            refresh_minutes=_int("PODCAST_REFRESH_MINUTES", 60),
+            refresh_minutes=_int("PODCAST_REFRESH_MINUTES", 15),
             transcode_mode=os.environ.get("PODCAST_TRANSCODE_MODE", "auto").lower(),
             max_bitrate_kbps=_int("PODCAST_MAX_BITRATE_KBPS", 128),
             target_bitrate_kbps=_int("PODCAST_TARGET_BITRATE_KBPS", 64),

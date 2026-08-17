@@ -70,7 +70,7 @@ All optional. Set only what you want to change.
 | `PODCAST_COOKIE_SECURE` | `false` | Set `true` once you only reach the server over HTTPS |
 | `PODCAST_RETENTION_DAYS` | `14` | How long the **server** keeps audio (the watch keeps its own copies 2 days) |
 | `PODCAST_EPISODES_PER_FEED` | `5` | Ready episodes kept per show |
-| `PODCAST_REFRESH_MINUTES` | `60` | Feed poll interval |
+| `PODCAST_REFRESH_MINUTES` | `15` | Starting poll interval. Editable in the web UI under **Settings**, which overrides this |
 | `PODCAST_TRANSCODE_MODE` | `auto` | `auto` / `always` / `never` |
 | `PODCAST_MAX_BITRATE_KBPS` | `128` | Above this, `auto` re-encodes |
 | `PODCAST_TARGET_BITRATE_KBPS` | `64` | Mono MP3 target when re-encoding |

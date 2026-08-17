@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Settings — GarminPodcast{% endblock %}
+{% block content %}
+
+<h2>Settings</h2>
+
+{% if saved %}
+<div class="panel" style="padding:11px 14px;margin-bottom:18px;border-color:var(--accent);">
+  Saved. The poll schedule was updated without a restart.
+</div>
+{% endif %}
+
+<div class="panel" style="padding:18px;">
+  <form method="post" action="/settings">
+    <label for="refresh_minutes" style="display:block;font-weight:600;margin-bottom:4px;">
+      Check shows for new episodes
+    </label>
+    <p class="muted" style="margin:0 0 12px;font-size:13px;">
+      How often the server polls every feed and downloads anything new.
+      Between {{ min_refresh }} and {{ max_refresh }} minutes.
+    </p>
+    <div class="row">
+      <input type="number" id="refresh_minutes" name="refresh_minutes"
+             value="{{ refresh_minutes }}" min="{{ min_refresh }}" max="{{ max_refresh }}"
+             required style="min-width:110px;width:110px;">
+      <span class="muted">minutes</span>
+      <button type="submit">Save</button>
+    </div>
+  </form>
+
+  {% if next_run %}
+  <p class="muted" style="font-size:13px;margin:16px 0 0;">
+    Next check: {{ next_run.strftime('%H:%M:%S') }}
+  </p>
+  {% endif %}
+</div>
+
+<h2>Set in the container</h2>
+<p class="muted" style="margin-top:0;font-size:14px;">
+  These come from environment variables, so changing one means editing the
+  container and redeploying.
+</p>
+<div class="panel">
+  <table>
+    <tr><th>Setting</th><th>Current</th><th>Variable</th></tr>
+    <tr>
+      <td>Episodes kept per show</td>
+      <td class="num">{{ settings.episodes_per_feed }}</td>
+      <td><code>PODCAST_EPISODES_PER_FEED</code></td>
+    </tr>
+    <tr>
+      <td>Server retention</td>
+      <td class="num">{{ settings.retention_days }} days</td>
+      <td><code>PODCAST_RETENTION_DAYS</code></td>
+    </tr>
+    <tr>
+      <td>Transcoding</td>
+      <td class="num">{{ settings.transcode_mode }}</td>
+      <td><code>PODCAST_TRANSCODE_MODE</code></td>
+    </tr>
+    <tr>
+      <td>Target bitrate</td>
+      <td class="num">{{ settings.target_bitrate_kbps }} kbps</td>
+      <td><code>PODCAST_TARGET_BITRATE_KBPS</code></td>
+    </tr>
+  </table>
+</div>
+{% endblock %}

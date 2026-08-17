@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ show.title }} — GarminPodcast{% endblock %}
+{% block content %}
+
+<a class="back" href="/">&larr; Library</a>
+
+<div class="showhead">
+  {% if show.artwork_path %}
+    <img src="/artwork/{{ show.id }}" alt="">
+  {% else %}
+    <div class="placeholder" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:34px;">♪</div>
+  {% endif %}
+  <div style="min-width:0;">
+    <h1>{{ show.title or show.url }}</h1>
+    {% if show.author %}<p class="by">{{ show.author }}</p>{% endif %}
+    <div class="stats muted" style="font-size:13px;margin-bottom:14px;">
+      {{ show.ready }} ready · {{ show.bytes | size }} ·
+      keeping newest {{ settings.episodes_per_feed }} ·
+      checked {{ show.last_checked | ago }}
+    </div>
+    <div class="row">
+      <form class="inline" method="post" action="/feeds/{{ show.id }}/refresh">
+        <button type="submit">Check now</button>
+      </form>
+      {% if show.failed %}
+      <form class="inline" method="post" action="/feeds/{{ show.id }}/retry-failed">
+        <button type="submit">Retry {{ show.failed }} failed</button>
+      </form>
+      {% endif %}
+      <form class="inline" method="post" action="/feeds/{{ show.id }}/delete"
+            onsubmit="return confirm('Remove this show and delete its downloaded audio?');">
+        <button type="submit" class="danger">Remove show</button>
+      </form>
+    </div>
+    <div class="muted" style="font-size:12px;margin-top:10px;word-break:break-all;">{{ show.url }}</div>
+  </div>
+</div>
+
+{% if show.last_error %}
+<div class="warn"><strong>Last check failed.</strong> {{ show.last_error }}</div>
+{% endif %}
+
+<h2>Episodes</h2>
+<div class="panel">
+  <table>
+    <tr>
+      <th>Episode</th><th class="num">Published</th><th class="num">Length</th>
+      <th class="num">Size</th><th class="num">Status</th><th></th>
+    </tr>
+    {% for e in episodes %}
+    <tr>
+      <td>
+        {{ e.title }}
+        {% if e.state == 'error' and e.error %}
+        <div class="muted" style="font-size:12px;">{{ e.error }}</div>
+        {% endif %}
+      </td>
+      <td class="num muted">{{ e.published | ago }}</td>
+      <td class="num">{{ e.duration | duration }}</td>
+      <td class="num">{{ e.file_size | size }}</td>
+      <td class="num">
+        <span class="badge {% if e.state == 'ready' %}ok{% elif e.state == 'error' %}err{% endif %}">
+          {{ e.state }}
+        </span>
+      </td>
+      <td class="num">
+        {% if e.state == 'ready' %}
+        <form class="inline" method="post" action="/episodes/{{ e.ref_id }}/delete">
+          <button type="submit" class="danger">Delete</button>
+        </form>
+        {% elif e.state == 'error' %}
+        <form class="inline" method="post" action="/episodes/{{ e.ref_id }}/retry">
+          <button type="submit">Retry</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="muted">
+      Nothing yet — the next check will pick up the newest episodes.
+    </td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<p class="muted" style="font-size:13px;margin-top:14px;">
+  Episodes are kept on the server for {{ settings.retention_days }} days. Copies
+  downloaded to the watch delete themselves after 2 days.
+</p>
+{% endblock %}

@@ -277,18 +277,17 @@ def retire_unneeded(feed_id: int, quota_met: bool) -> int:
     )
 
 
-def retry_failed(ref_id: int | None = None) -> int:
-    """Put failed episodes back in the queue with a fresh attempt budget."""
-    if ref_id is None:
-        return db.execute_count(
-            "UPDATE episodes SET state = 'pending', attempts = 0, error = '' "
-            "WHERE state = 'error'"
-        )
-    return db.execute_count(
-        "UPDATE episodes SET state = 'pending', attempts = 0, error = '' "
-        "WHERE ref_id = ? AND state = 'error'",
-        (ref_id,),
-    )
+def retry_failed(ref_id: int | None = None, feed_id: int | None = None) -> int:
+    """Put failed episodes back in the queue with a fresh attempt budget.
+
+    Scoped to one episode, one show, or everything, depending on what is given.
+    """
+    base = "UPDATE episodes SET state = 'pending', attempts = 0, error = '' WHERE state = 'error'"
+    if ref_id is not None:
+        return db.execute_count(base + " AND ref_id = ?", (ref_id,))
+    if feed_id is not None:
+        return db.execute_count(base + " AND feed_id = ?", (feed_id,))
+    return db.execute_count(base)
 
 
 async def download_pending() -> int:

@@ -3,13 +3,11 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import api, db, feeds, media, web
+from . import api, db, media, scheduler, web
 from .auth import get_api_token
 from .config import settings
 
@@ -18,18 +16,6 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
 )
 log = logging.getLogger("garminpodcast")
-
-scheduler = AsyncIOScheduler()
-
-
-async def poll_cycle() -> None:
-    """One full maintenance pass: refresh feeds, fetch new audio, expire old."""
-    try:
-        await feeds.refresh_all()
-        await media.download_pending()
-        media.purge_expired()
-    except Exception:
-        log.exception("scheduled poll failed")
 
 
 @asynccontextmanager
@@ -52,31 +38,14 @@ async def lifespan(app: FastAPI):
             settings.admin_password,
         )
 
-    scheduler.add_job(
-        poll_cycle,
-        "interval",
-        minutes=settings.refresh_minutes,
-        id="poll",
-        max_instances=1,
-        coalesce=True,
-    )
-    # Kick one pass shortly after boot so a fresh container fills up without
-    # waiting out a full refresh interval.
-    scheduler.add_job(
-        poll_cycle,
-        "date",
-        run_date=datetime.now() + timedelta(seconds=15),
-        id="poll_initial",
-    )
     scheduler.start()
     log.info(
-        "ready — refresh every %dmin, server retention %dd, transcode=%s",
-        settings.refresh_minutes,
+        "ready — server retention %dd, transcode=%s",
         settings.retention_days,
         settings.transcode_mode,
     )
     yield
-    scheduler.shutdown(wait=False)
+    scheduler.scheduler.shutdown(wait=False)
 
 
 app = FastAPI(title="GarminPodcast", docs_url=None, redoc_url=None, lifespan=lifespan)

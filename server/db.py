@@ -21,7 +21,9 @@ CREATE TABLE IF NOT EXISTS feeds (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     url          TEXT NOT NULL UNIQUE,
     title        TEXT NOT NULL DEFAULT '',
+    author       TEXT NOT NULL DEFAULT '',
     image_url    TEXT NOT NULL DEFAULT '',
+    artwork_path TEXT NOT NULL DEFAULT '',
     enabled      INTEGER NOT NULL DEFAULT 1,
     added_at     INTEGER NOT NULL,
     last_checked INTEGER NOT NULL DEFAULT 0,
@@ -76,11 +78,18 @@ def connect() -> sqlite3.Connection:
 
 def _migrate(conn: sqlite3.Connection) -> None:
     """Additive column migrations for databases created by earlier versions."""
-    existing = {row["name"] for row in conn.execute("PRAGMA table_info(episodes)")}
-    if "attempts" not in existing:
-        conn.execute(
-            "ALTER TABLE episodes ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0"
-        )
+
+    def columns(table: str) -> set[str]:
+        return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+
+    additions = [
+        ("episodes", "attempts", "INTEGER NOT NULL DEFAULT 0"),
+        ("feeds", "author", "TEXT NOT NULL DEFAULT ''"),
+        ("feeds", "artwork_path", "TEXT NOT NULL DEFAULT ''"),
+    ]
+    for table, column, spec in additions:
+        if column not in columns(table):
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {spec}")
 
 
 def query(sql: str, params: Iterable[Any] = ()) -> list[sqlite3.Row]:
