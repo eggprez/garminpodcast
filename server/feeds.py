@@ -14,7 +14,7 @@ from .config import settings
 
 log = logging.getLogger(__name__)
 
-USER_AGENT = "GarminPodcast/1.0 (+https://github.com/)"
+USER_AGENT = "GarminPodcast/1.0 (+https://github.com/eggprez/garminpodcast)"
 AUDIO_HINTS = ("audio/", "video/mp4")  # some feeds mislabel MP3s as video/mp4
 
 
@@ -66,7 +66,10 @@ async def fetch_feed(url: str) -> feedparser.FeedParserDict:
     async with httpx.AsyncClient(
         follow_redirects=True,
         timeout=30.0,
-        headers={"User-Agent": USER_AGENT},
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "application/rss+xml, application/xml, text/xml, */*",
+        },
     ) as client:
         response = await client.get(url)
         response.raise_for_status()

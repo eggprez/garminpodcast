@@ -33,6 +33,9 @@ jobs:
       - name: HTTP API and web UI
         run: python tests/test_api.py
 
+      - name: Concurrent download passes
+        run: python tests/test_concurrency.py
+
       - name: Docker image builds
         run: docker build -t garminpodcast:ci .
 

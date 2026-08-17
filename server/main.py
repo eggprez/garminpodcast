@@ -36,6 +36,7 @@ async def poll_cycle() -> None:
 async def lifespan(app: FastAPI):
     db.connect()
     get_api_token()  # generate on first boot so the UI always has one to show
+    media.reset_interrupted()
 
     if not media.ffmpeg_available():
         log.error("ffmpeg/ffprobe not found on PATH — downloads will fail")

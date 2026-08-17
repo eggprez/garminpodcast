@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS episodes (
     file_size      INTEGER NOT NULL DEFAULT 0,
     state          TEXT NOT NULL DEFAULT 'pending',
     error          TEXT NOT NULL DEFAULT '',
+    attempts       INTEGER NOT NULL DEFAULT 0,
     created_at     INTEGER NOT NULL,
     downloaded_at  INTEGER NOT NULL DEFAULT 0,
     UNIQUE (feed_id, guid)
@@ -68,8 +69,18 @@ def connect() -> sqlite3.Connection:
         _conn.execute("PRAGMA journal_mode=WAL")
         _conn.execute("PRAGMA foreign_keys=ON")
         _conn.executescript(SCHEMA)
+        _migrate(_conn)
         _conn.commit()
     return _conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Additive column migrations for databases created by earlier versions."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(episodes)")}
+    if "attempts" not in existing:
+        conn.execute(
+            "ALTER TABLE episodes ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0"
+        )
 
 
 def query(sql: str, params: Iterable[Any] = ()) -> list[sqlite3.Row]:
@@ -89,6 +100,19 @@ def execute(sql: str, params: Iterable[Any] = ()) -> int:
         cur = conn.execute(sql, tuple(params))
         conn.commit()
         return cur.lastrowid or 0
+
+
+def execute_count(sql: str, params: Iterable[Any] = ()) -> int:
+    """Run a write and return the number of rows it changed.
+
+    Used for conditional updates that double as a claim: if the row was
+    already taken by another task the update matches nothing and returns 0.
+    """
+    with _lock:
+        conn = connect()
+        cur = conn.execute(sql, tuple(params))
+        conn.commit()
+        return cur.rowcount
 
 
 def get_setting(key: str, default: str = "") -> str:

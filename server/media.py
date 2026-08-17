@@ -21,7 +21,9 @@ import asyncio
 import json
 import logging
 import shutil
+import time
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 
@@ -31,6 +33,13 @@ from .config import settings
 log = logging.getLogger(__name__)
 
 DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, read=600.0)
+
+# How many times an episode is retried before it is left alone.
+MAX_ATTEMPTS = 3
+
+# Only one download pass runs at a time; see download_pending().
+_download_lock = asyncio.Lock()
+_rerun_requested = False
 
 
 async def _run(*args: str) -> tuple[int, bytes, bytes]:
@@ -135,7 +144,20 @@ async def _encode(src: Path, dest: Path, title: str, artist: str, reencode: bool
 
 
 async def process_episode(ref_id: int) -> bool:
-    """Download and normalise one pending episode. Returns True on success."""
+    """Download and normalise one episode. Returns True on success.
+
+    The state change to 'downloading' doubles as a claim: it only matches a row
+    that is still pending or errored, so if another pass got there first this
+    returns immediately rather than downloading the same episode twice.
+    """
+    claimed = db.execute_count(
+        "UPDATE episodes SET state = 'downloading', attempts = attempts + 1 "
+        "WHERE ref_id = ? AND state IN ('pending', 'error')",
+        (ref_id,),
+    )
+    if not claimed:
+        return False
+
     episode = db.query_one("SELECT * FROM episodes WHERE ref_id = ?", (ref_id,))
     if episode is None or not episode["source_url"]:
         return False
@@ -143,9 +165,9 @@ async def process_episode(ref_id: int) -> bool:
     feed = db.query_one("SELECT title FROM feeds WHERE id = ?", (episode["feed_id"],))
     show = feeds.clean_text(feed["title"] if feed else "Podcast")
 
-    db.execute("UPDATE episodes SET state = 'downloading' WHERE ref_id = ?", (ref_id,))
-
-    tmp_raw = settings.audio_dir / f".{ref_id}.raw"
+    # Unique per attempt: two passes must never share a scratch file, or one
+    # cleaning up would delete the other's download mid-read.
+    tmp_raw = settings.audio_dir / f".{ref_id}.{uuid4().hex[:8]}.raw"
     final = settings.audio_dir / f"{ref_id}.mp3"
 
     try:
@@ -181,8 +203,8 @@ async def process_episode(ref_id: int) -> bool:
         tmp_raw.unlink(missing_ok=True)
 
 
-async def download_pending() -> int:
-    """Download the newest pending episodes, respecting the per-feed cap."""
+async def _download_pass() -> int:
+    """One sweep over every feed, downloading whatever is missing."""
     done = 0
     for feed in db.query("SELECT id FROM feeds WHERE enabled = 1"):
         ready = db.query_one(
@@ -192,15 +214,42 @@ async def download_pending() -> int:
         slots = settings.episodes_per_feed - (ready["n"] if ready else 0)
         if slots <= 0:
             continue
-        pending = db.query(
-            "SELECT ref_id FROM episodes WHERE feed_id = ? AND state = 'pending' "
+        # Errored episodes are retried until MAX_ATTEMPTS so that a transient
+        # failure does not strand an episode forever.
+        queued = db.query(
+            "SELECT ref_id FROM episodes WHERE feed_id = ? "
+            "  AND (state = 'pending' OR (state = 'error' AND attempts < ?)) "
             "ORDER BY published DESC LIMIT ?",
-            (feed["id"], slots),
+            (feed["id"], MAX_ATTEMPTS, slots),
         )
-        for row in pending:
+        for row in queued:
             if await process_episode(row["ref_id"]):
                 done += 1
     return done
+
+
+async def download_pending() -> int:
+    """Download missing episodes, serialised across all callers.
+
+    Adding several feeds at once used to fire one concurrent pass per feed;
+    they raced over the same rows and scratch files. The lock keeps a single
+    pass running, and `_rerun_requested` coalesces everything that arrives
+    while it works into exactly one follow-up sweep instead of a queue of them.
+    """
+    global _rerun_requested
+
+    if _download_lock.locked():
+        _rerun_requested = True
+        return 0
+
+    total = 0
+    async with _download_lock:
+        while True:
+            _rerun_requested = False
+            total += await _download_pass()
+            if not _rerun_requested:
+                break
+    return total
 
 
 def purge_expired() -> int:
@@ -230,9 +279,34 @@ def purge_expired() -> int:
             path.unlink(missing_ok=True)
             removed += 1
 
+    # Scratch files from a download killed mid-flight. The age check keeps this
+    # from touching a download that is still running right now.
+    stale_before = time.time() - 3600
+    for path in settings.audio_dir.glob(".*.raw"):
+        try:
+            if path.stat().st_mtime < stale_before:
+                path.unlink(missing_ok=True)
+                removed += 1
+        except OSError:
+            pass
+
     if removed:
         log.info("retention: removed %d file(s)", removed)
     return removed
+
+
+def reset_interrupted() -> int:
+    """Return episodes stranded in 'downloading' to the queue.
+
+    A container killed mid-download leaves rows claimed by a task that no
+    longer exists; without this they would never be retried.
+    """
+    count = db.execute_count(
+        "UPDATE episodes SET state = 'pending' WHERE state = 'downloading'"
+    )
+    if count:
+        log.info("requeued %d episode(s) interrupted by a restart", count)
+    return count
 
 
 def ffmpeg_available() -> bool:
