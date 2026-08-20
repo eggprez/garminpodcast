@@ -211,17 +211,19 @@ async def _download_pass() -> int:
     already at its quota skipped its queue entirely, so an episode that had
     failed could never be retried and sat in the library showing a stale error
     forever.
+
+    `ready` is counted while walking the candidates newest-first, not from a
+    global count taken up front. A global count made the quota look "met" by
+    stale ready episodes further down the list, so a feed that had already
+    reached its quota once would never look at its newest candidate again —
+    any episode published after that point got claimed straight into
+    'skipped' by retire_unneeded() without ever being attempted.
     """
     done = 0
     target = settings.episodes_per_feed
 
     for feed in db.query("SELECT id FROM feeds WHERE enabled = 1"):
         feed_id = feed["id"]
-        row = db.query_one(
-            "SELECT COUNT(*) AS n FROM episodes WHERE feed_id = ? AND state = 'ready'",
-            (feed_id,),
-        )
-        ready = row["n"] if row else 0
 
         # Look past the target so one permanently broken episode cannot keep a
         # feed short of its quota forever.
@@ -231,10 +233,14 @@ async def _download_pass() -> int:
             (feed_id, target * 3),
         )
 
+        ready = 0
         for candidate in candidates:
             if ready >= target:
                 break
-            if candidate["state"] in ("ready", "downloading"):
+            if candidate["state"] == "ready":
+                ready += 1
+                continue
+            if candidate["state"] == "downloading":
                 continue
             if candidate["state"] == "error" and candidate["attempts"] >= MAX_ATTEMPTS:
                 continue
@@ -243,8 +249,32 @@ async def _download_pass() -> int:
                 done += 1
 
         retire_unneeded(feed_id, ready >= target)
+        expire_surplus_ready(feed_id, target)
 
     return done
+
+
+def expire_surplus_ready(feed_id: int, target: int) -> int:
+    """Retire ready episodes that a newer arrival has bumped out of the
+    newest-`target` window, so "keeping newest N" (per the show page) stays
+    true instead of ready episodes only ever accumulating.
+    """
+    rows = db.query(
+        "SELECT ref_id, file_path FROM episodes WHERE feed_id = ? AND state = 'ready' "
+        "ORDER BY published DESC",
+        (feed_id,),
+    )
+    removed = 0
+    for row in rows[target:]:
+        if row["file_path"]:
+            Path(row["file_path"]).unlink(missing_ok=True)
+        db.execute(
+            "UPDATE episodes SET state = 'expired', file_path = '', file_size = 0 "
+            "WHERE ref_id = ?",
+            (row["ref_id"],),
+        )
+        removed += 1
+    return removed
 
 
 def retire_unneeded(feed_id: int, quota_met: bool) -> int:
