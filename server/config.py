@@ -88,6 +88,11 @@ class Settings:
 
     base_url: str
 
+    # Baked in at image build time (see Dockerfile's VERSION build arg); "dev"
+    # for anything built locally without it, so the GUI still says something
+    # sane instead of a blank field.
+    app_version: str
+
     @classmethod
     def from_env(cls) -> "Settings":
         data_dir = Path(os.environ.get("PODCAST_DATA_DIR", "/data"))
@@ -112,6 +117,7 @@ class Settings:
             max_bitrate_kbps=_int("PODCAST_MAX_BITRATE_KBPS", 128),
             target_bitrate_kbps=_int("PODCAST_TARGET_BITRATE_KBPS", 64),
             base_url=os.environ.get("PODCAST_BASE_URL", "").rstrip("/"),
+            app_version=os.environ.get("PODCAST_VERSION", "").strip() or "dev",
         )
 
 

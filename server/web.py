@@ -70,6 +70,7 @@ def _fmt_ago(ts: int) -> str:
 templates.env.filters["duration"] = _fmt_duration
 templates.env.filters["size"] = _fmt_size
 templates.env.filters["ago"] = _fmt_ago
+templates.env.globals["app_version"] = settings.app_version
 
 
 @router.get("/login", response_class=HTMLResponse)

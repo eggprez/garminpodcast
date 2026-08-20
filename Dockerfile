@@ -1,5 +1,10 @@
 FROM python:3.12-slim
 
+# Set via --build-arg from the version tag the image is published under (see
+# docker-publish.yml), so the running app can show what it actually is.
+ARG VERSION=dev
+ENV PODCAST_VERSION=$VERSION
+
 # ffmpeg/ffprobe do the format normalisation that keeps Garmin's media pipeline
 # happy; the app refuses to download without them.
 RUN apt-get update \
