@@ -27,7 +27,13 @@ CREATE TABLE IF NOT EXISTS feeds (
     enabled      INTEGER NOT NULL DEFAULT 1,
     added_at     INTEGER NOT NULL,
     last_checked INTEGER NOT NULL DEFAULT 0,
-    last_error   TEXT NOT NULL DEFAULT ''
+    last_error   TEXT NOT NULL DEFAULT '',
+    -- NULL on both means "use the server-wide default"; set per show to
+    -- override it. keep_episodes is the newest-N quota, max_age_days drops
+    -- anything published longer ago than that regardless of quota, so an old
+    -- backlog episode can never sit in the quota blocking real new ones.
+    keep_episodes INTEGER,
+    max_age_days  INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS episodes (
@@ -86,6 +92,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         ("episodes", "attempts", "INTEGER NOT NULL DEFAULT 0"),
         ("feeds", "author", "TEXT NOT NULL DEFAULT ''"),
         ("feeds", "artwork_path", "TEXT NOT NULL DEFAULT ''"),
+        ("feeds", "keep_episodes", "INTEGER"),
+        ("feeds", "max_age_days", "INTEGER"),
     ]
     for table, column, spec in additions:
         if column not in columns(table):

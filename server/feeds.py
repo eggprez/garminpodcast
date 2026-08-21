@@ -122,10 +122,11 @@ async def refresh_feed(feed_id: int) -> int:
     if image:
         await artwork.cache_artwork(feed_id, image)
 
-    # Only consider the newest N; older ones would just be downloaded and then
-    # immediately aged out by retention.
+    # Only consider the newest N (this show's own quota, if it has one);
+    # older ones would just be downloaded and then immediately retired.
+    keep = feed["keep_episodes"] if feed["keep_episodes"] is not None else settings.episodes_per_feed
     entries = sorted(parsed.entries, key=_published, reverse=True)
-    entries = entries[: max(settings.episodes_per_feed * 2, settings.episodes_per_feed)]
+    entries = entries[: max(keep * 2, keep)]
 
     new_count = 0
     for entry in entries:

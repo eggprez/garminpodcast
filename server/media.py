@@ -218,12 +218,31 @@ async def _download_pass() -> int:
     reached its quota once would never look at its newest candidate again —
     any episode published after that point got claimed straight into
     'skipped' by retire_unneeded() without ever being attempted.
+
+    Each show can override the server-wide `episodes_per_feed` quota and add
+    a `max_age_days` cutoff on publish date (see feeds.keep_episodes /
+    max_age_days). The cutoff is enforced before anything else so a backlog
+    episode that is old by publish date but only recently downloaded can
+    never occupy a quota slot a genuinely new episode needs.
     """
     done = 0
-    target = settings.episodes_per_feed
 
-    for feed in db.query("SELECT id FROM feeds WHERE enabled = 1"):
+    for feed in db.query(
+        "SELECT id, keep_episodes, max_age_days FROM feeds WHERE enabled = 1"
+    ):
         feed_id = feed["id"]
+        target = (
+            feed["keep_episodes"]
+            if feed["keep_episodes"] is not None
+            else settings.episodes_per_feed
+        )
+        cutoff = (
+            db.now() - feed["max_age_days"] * 86400
+            if feed["max_age_days"] is not None
+            else None
+        )
+
+        expire_stale(feed_id, cutoff)
 
         # Look past the target so one permanently broken episode cannot keep a
         # feed short of its quota forever.
@@ -248,10 +267,39 @@ async def _download_pass() -> int:
                 ready += 1
                 done += 1
 
-        retire_unneeded(feed_id, ready >= target)
+        retire_unneeded(feed_id, ready >= target, target)
         expire_surplus_ready(feed_id, target)
 
     return done
+
+
+def expire_stale(feed_id: int, cutoff: int | None) -> int:
+    """Retire anything published before the show's own age cutoff.
+
+    Applies regardless of quota: a show's `max_age_days` is a hard "never
+    keep this" line, not just a tiebreaker against newer episodes. Ready
+    episodes lose their file and go 'expired'; anything still waiting to be
+    tried goes 'skipped' instead, the same as a permanently unwanted surplus.
+    A 'downloading' row is left alone since a pass may be mid-fetch on it.
+    """
+    if cutoff is None:
+        return 0
+    removed = 0
+    for row in db.query(
+        "SELECT ref_id, file_path, state FROM episodes WHERE feed_id = ? "
+        "AND published < ? AND state NOT IN ('expired', 'skipped', 'downloading')",
+        (feed_id, cutoff),
+    ):
+        if row["file_path"]:
+            Path(row["file_path"]).unlink(missing_ok=True)
+        new_state = "expired" if row["state"] == "ready" else "skipped"
+        db.execute(
+            "UPDATE episodes SET state = ?, file_path = '', file_size = 0, error = '' "
+            "WHERE ref_id = ?",
+            (new_state, row["ref_id"]),
+        )
+        removed += 1
+    return removed
 
 
 def expire_surplus_ready(feed_id: int, target: int) -> int:
@@ -277,7 +325,7 @@ def expire_surplus_ready(feed_id: int, target: int) -> int:
     return removed
 
 
-def retire_unneeded(feed_id: int, quota_met: bool) -> int:
+def retire_unneeded(feed_id: int, quota_met: bool, target: int) -> int:
     """Drop episodes we are never going to fetch out of the failure list.
 
     An episode we do not want on disk should not sit in the library showing a
@@ -303,7 +351,7 @@ def retire_unneeded(feed_id: int, quota_met: bool) -> int:
         "  SELECT ref_id FROM episodes WHERE feed_id = ? "
         "  ORDER BY published DESC LIMIT ?"
         ")",
-        (feed_id, feed_id, settings.episodes_per_feed * 3),
+        (feed_id, feed_id, target * 3),
     )
 
 

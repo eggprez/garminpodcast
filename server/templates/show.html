@@ -15,7 +15,6 @@
     {% if show.author %}<p class="by">{{ show.author }}</p>{% endif %}
     <div class="stats muted" style="font-size:13px;margin-bottom:14px;">
       {{ show.ready }} ready · {{ show.bytes | size }} ·
-      keeping newest {{ settings.episodes_per_feed }} ·
       checked {{ show.last_checked | ago }}
     </div>
     <div class="row">
@@ -39,6 +38,34 @@
 {% if show.last_error %}
 <div class="warn"><strong>Last check failed.</strong> {{ show.last_error }}</div>
 {% endif %}
+
+<div class="panel" style="padding:14px 16px;margin-bottom:20px;">
+  <form method="post" action="/feeds/{{ show.id }}/settings" class="row">
+    <label style="display:flex;align-items:center;gap:6px;">
+      Keep newest
+      <input type="number" name="keep_episodes" min="1"
+             placeholder="{{ settings.episodes_per_feed }}"
+             value="{{ '' if show.keep_episodes is none else show.keep_episodes }}"
+             style="min-width:64px;width:64px;">
+      episodes
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;">
+      · drop anything published over
+      <input type="number" name="max_age_days" min="1" placeholder="no limit"
+             value="{{ '' if show.max_age_days is none else show.max_age_days }}"
+             style="min-width:64px;width:64px;">
+      days ago
+    </label>
+    <button type="submit">Save</button>
+  </form>
+  <p class="muted" style="font-size:12px;margin:8px 0 0;">
+    Leave a box blank to use the server default. The age cutoff checks when an
+    episode was <em>published</em>, so a backlog episode that is old but was
+    only recently downloaded can't sit in the quota blocking real new ones —
+    it's separate from the {{ settings.retention_days }}-day server retention
+    below, which is based on download date.
+  </p>
+</div>
 
 <h2>Episodes</h2>
 <div class="panel">

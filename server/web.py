@@ -232,6 +232,36 @@ async def delete_feed(request: Request, feed_id: int):
     return _redirect()
 
 
+def _parse_override(raw: str) -> int | None:
+    """Blank clears the override (falls back to the server default);
+    anything else must be a positive integer or it is treated as blank."""
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+@router.post("/feeds/{feed_id}/settings")
+async def update_feed_settings(
+    request: Request,
+    feed_id: int,
+    keep_episodes: str = Form(""),
+    max_age_days: str = Form(""),
+):
+    if not is_logged_in(request):
+        return _redirect("/login")
+    db.execute(
+        "UPDATE feeds SET keep_episodes = ?, max_age_days = ? WHERE id = ?",
+        (_parse_override(keep_episodes), _parse_override(max_age_days), feed_id),
+    )
+    asyncio.create_task(media.download_pending())
+    return _redirect(f"/feeds/{feed_id}")
+
+
 @router.post("/feeds/{feed_id}/refresh")
 async def refresh_feed(request: Request, feed_id: int):
     if not is_logged_in(request):
