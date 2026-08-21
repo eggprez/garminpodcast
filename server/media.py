@@ -449,5 +449,37 @@ def reset_interrupted() -> int:
     return count
 
 
+SKIPPED_RESET_FLAG = "skipped_reset_v1"
+
+
+def reset_stale_skips() -> int:
+    """One-time, on upgrade: give every 'skipped' episode a fresh look.
+
+    Before the newest-first candidate walk was fixed, any episode published
+    after a feed first reached its quota got claimed straight into 'skipped'
+    without ever being attempted -- and 'skipped' rows are deliberately never
+    reconsidered, so those episodes were stuck there permanently. Deleting or
+    retrying some other episode on the show does nothing for them; only a
+    reset does.
+
+    This is safe to run broadly because nothing sets 'skipped' except the
+    download pass itself (never a direct user action), so anything that is
+    still genuinely surplus under the corrected logic gets marked 'skipped'
+    again on the very next pass -- it is fully self-correcting. Gated behind
+    a settings flag so it only ever runs once; without that it would also
+    keep reviving *deliberate* long-term surplus (old backlog beyond a
+    show's quota) forever, which is not the point.
+    """
+    if db.get_setting(SKIPPED_RESET_FLAG):
+        return 0
+    count = db.execute_count(
+        "UPDATE episodes SET state = 'pending', error = '' WHERE state = 'skipped'"
+    )
+    db.set_setting(SKIPPED_RESET_FLAG, "1")
+    if count:
+        log.info("re-queued %d episode(s) previously stuck as 'skipped'", count)
+    return count
+
+
 def ffmpeg_available() -> bool:
     return bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
